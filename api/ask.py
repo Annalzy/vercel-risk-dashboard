@@ -2,15 +2,14 @@
 Vercel Serverless Function — /api/ask
 接收用户问题，读取全部风险事件 CSV，调用 DeepSeek API 以企业风险分析师身份回答。
 API key 从环境变量 DEEPSEEK_API_KEY 读取，不出现在前端代码中。
+使用函数式 handler（兼容 Vercel Python Runtime v3+）。
 """
 
 import csv
 import json
 import os
-from http.server import BaseHTTPRequestHandler
 from urllib.request import Request, urlopen
 from urllib.error import URLError
-
 
 DEEPSEEK_URL = "https://api.deepseek.com/v1/chat/completions"
 MODEL = "deepseek-v4-pro"
@@ -24,6 +23,12 @@ SYSTEM_PROMPT = """你是一位资深企业地缘风险分析师，服务于一�
 3. 回答要专业、简洁、结构化，使用中文。
 4. 引用具体事件时注明日期、国家和来源。
 5. 如果用户问的是总结/趋势类问题，给出数据驱动的分析而非空泛评论。"""
+
+CORS_HEADERS = {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type",
+}
 
 
 def load_events():
@@ -79,63 +84,55 @@ def call_deepseek(api_key, question, events):
         return result["choices"][0]["message"]["content"]
 
 
-def json_response(handler, status_code, data):
-    """发送 JSON 响应"""
+def handler(request):
+    """
+    Vercel Python 函数式 entrypoint。
+    request 是 http.server.BaseHTTPRequestHandler 实例。
+    """
+    # CORS 预检
+    if request.command == "OPTIONS":
+        request.send_response(204)
+        for k, v in CORS_HEADERS.items():
+            request.send_header(k, v)
+        request.end_headers()
+        return
+
+    # 仅接受 POST
+    if request.command != "POST":
+        return _json_reply(request, 405, {"error": "请使用 POST 请求"})
+
+    try:
+        content_length = int(request.headers.get("Content-Length", 0))
+        raw = request.rfile.read(content_length) if content_length else b"{}"
+        data = json.loads(raw)
+        question = (data.get("question") or "").strip()
+
+        if not question:
+            return _json_reply(request, 400, {"error": "请输入问题"})
+
+        api_key = os.environ.get("DEEPSEEK_API_KEY", "")
+        if not api_key:
+            return _json_reply(request, 500, {"error": "服务端未配置 DEEPSEEK_API_KEY 环境变量"})
+
+        events = load_events()
+        answer = call_deepseek(api_key, question, events)
+        return _json_reply(request, 200, {"answer": answer})
+
+    except json.JSONDecodeError:
+        return _json_reply(request, 400, {"error": "请求格式错误"})
+    except URLError as e:
+        return _json_reply(request, 502, {"error": f"DeepSeek API 请求失败: {str(e)}"})
+    except Exception as e:
+        return _json_reply(request, 500, {"error": f"服务器内部错误: {str(e)}"})
+
+
+def _json_reply(request, status_code, data):
+    """发送 JSON 响应（附带 CORS 头）"""
     body = json.dumps(data, ensure_ascii=False).encode("utf-8")
-    handler.send_response(status_code)
-    handler.send_header("Content-Type", "application/json; charset=utf-8")
-    handler.send_header("Content-Length", str(len(body)))
-    handler.end_headers()
-    handler.wfile.write(body)
-
-
-class handler(BaseHTTPRequestHandler):
-
-    def do_OPTIONS(self):
-        """CORS 预检"""
-        self.send_response(204)
-        self._cors_headers()
-        self.end_headers()
-
-    def do_POST(self):
-        try:
-            # 读取请求体
-            content_length = int(self.headers.get("Content-Length", 0))
-            body = self.rfile.read(content_length) if content_length else b"{}"
-            data = json.loads(body)
-            question = (data.get("question") or "").strip()
-
-            if not question:
-                return json_response(self, 400, {"error": "请输入问题"})
-
-            # 检查 API key
-            api_key = os.environ.get("DEEPSEEK_API_KEY", "")
-            if not api_key:
-                return json_response(self, 500, {
-                    "error": "服务端未配置 DEEPSEEK_API_KEY 环境变量"
-                })
-
-            # 加载事件数据
-            events = load_events()
-
-            # 调用 DeepSeek
-            answer = call_deepseek(api_key, question, events)
-
-            json_response(self, 200, {"answer": answer})
-
-        except json.JSONDecodeError:
-            json_response(self, 400, {"error": "请求格式错误"})
-        except URLError as e:
-            json_response(self, 502, {"error": f"DeepSeek API 请求失败: {str(e)}"})
-        except Exception as e:
-            json_response(self, 500, {"error": f"服务器内部错误: {str(e)}"})
-
-    def _cors_headers(self):
-        self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "POST, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
-
-    # 重写以便 OPTIONS 也带 CORS
-    def end_headers(self):
-        self._cors_headers()
-        super().end_headers()
+    request.send_response(status_code)
+    request.send_header("Content-Type", "application/json; charset=utf-8")
+    request.send_header("Content-Length", str(len(body)))
+    for k, v in CORS_HEADERS.items():
+        request.send_header(k, v)
+    request.end_headers()
+    request.wfile.write(body)
