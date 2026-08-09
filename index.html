@@ -603,7 +603,7 @@ async function askQuestion() {
   answer.classList.remove("visible");
 
   try {
-    const resp = await fetch("/api/ask", {
+    const resp = await fetch("/api", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ question })
