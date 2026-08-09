@@ -1,0 +1,3 @@
+# Vercel Python 运行时依赖
+# urllib / json / csv / os 均为标准库，无需声明
+# 如后续增加依赖，在此列出

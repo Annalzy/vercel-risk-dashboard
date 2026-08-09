@@ -1,0 +1,697 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>企业地缘风险监测台</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js">
+</script>
+<style>
+  :root {
+    --bg-primary: #0b1729;
+    --bg-card: #0f1f3a;
+    --bg-table: #0d1b33;
+    --border: #1a3052;
+    --text-primary: #e8edf5;
+    --text-secondary: #8899b4;
+    --accent: #3b82f6;
+    --accent-hover: #2563eb;
+    --danger: #ef4444;
+    --warning: #f59e0b;
+    --success: #10b981;
+    --purple: #8b5cf6;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+      "Microsoft YaHei", "Helvetica Neue", sans-serif;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    min-height: 100vh;
+  }
+
+  /* ---- 顶部导航 ---- */
+  .topbar {
+    background: linear-gradient(135deg, #0d1b33 0%, #132744 100%);
+    border-bottom: 1px solid var(--border);
+    padding: 18px 32px;
+    display: flex; align-items: center; gap: 14px;
+  }
+  .topbar .logo {
+    width: 36px; height: 36px;
+    background: linear-gradient(135deg, var(--accent), #6366f1);
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px; font-weight: 700; color: #fff;
+  }
+  .topbar h1 { font-size: 20px; font-weight: 600; letter-spacing: .5px; }
+  .topbar .subtitle {
+    font-size: 13px; color: var(--text-secondary);
+    margin-left: auto;
+  }
+
+  /* ---- 主容器 ---- */
+  .container { max-width: 1280px; margin: 0 auto; padding: 24px 32px 48px; }
+
+  /* ---- 汇总卡片 ---- */
+  .cards {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+  .card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px 24px;
+    position: relative; overflow: hidden;
+  }
+  .card::before {
+    content: '';
+    position: absolute; top: 0; left: 0;
+    width: 4px; height: 100%;
+  }
+  .card:nth-child(1)::before { background: var(--accent); }
+  .card:nth-child(2)::before { background: var(--success); }
+  .card:nth-child(3)::before { background: var(--warning); }
+  .card:nth-child(4)::before { background: var(--purple); }
+  .card .label { font-size: 13px; color: var(--text-secondary); margin-bottom: 6px; }
+  .card .value { font-size: 32px; font-weight: 700; }
+  .card .extra { font-size: 12px; color: var(--text-secondary); margin-top: 4px; }
+
+  /* ---- 图表区 ---- */
+  .charts {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+  .chart-box {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px 24px;
+  }
+  .chart-box h3 {
+    font-size: 15px; font-weight: 600; margin-bottom: 16px;
+    color: var(--text-primary);
+  }
+  .chart-box canvas { max-height: 300px; }
+
+  /* ---- AI 问答区 ---- */
+  .qa-section {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    margin-bottom: 24px;
+  }
+  .qa-header {
+    display: flex; align-items: center; gap: 10px;
+    margin-bottom: 6px;
+  }
+  .qa-header h3 { font-size: 15px; font-weight: 600; }
+  .qa-badge {
+    font-size: 11px; padding: 2px 8px; border-radius: 10px;
+    background: rgba(99,102,241,.18); color: #a5b4fc;
+  }
+  .qa-desc { font-size: 13px; color: var(--text-secondary); margin-bottom: 16px; }
+  .qa-input-row {
+    display: flex; gap: 12px; align-items: flex-end;
+  }
+  .qa-input-row textarea {
+    flex: 1;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 16px;
+    font-size: 14px;
+    font-family: inherit;
+    line-height: 1.6;
+    resize: none;
+    outline: none;
+    transition: border-color .2s;
+  }
+  .qa-input-row textarea:focus { border-color: var(--accent); }
+  .qa-input-row textarea::placeholder { color: #4a5a7a; }
+  .qa-btn {
+    padding: 12px 24px;
+    background: linear-gradient(135deg, var(--accent), #6366f1);
+    border: none; border-radius: 10px;
+    color: #fff; font-weight: 600;
+    cursor: pointer; font-size: 14px;
+    transition: opacity .2s, transform .1s;
+    white-space: nowrap;
+    font-family: inherit;
+    height: 44px;
+  }
+  .qa-btn:hover { opacity: .9; }
+  .qa-btn:active { transform: scale(.97); }
+  .qa-btn:disabled { opacity: .5; cursor: not-allowed; transform: none; }
+
+  /* 加载动画 */
+  .qa-loading {
+    display: none; align-items: center; gap: 10px;
+    color: var(--text-secondary); font-size: 13px;
+    margin-top: 14px; padding: 12px 16px;
+    background: var(--bg-primary);
+    border-radius: 8px;
+  }
+  .qa-loading.visible { display: flex; }
+  .spinner {
+    width: 18px; height: 18px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin .8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* 回答区域 */
+  .qa-answer {
+    display: none;
+    margin-top: 16px;
+    padding: 20px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    font-size: 14px;
+    line-height: 1.85;
+    color: var(--text-primary);
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .qa-answer.visible { display: block; }
+  .qa-error {
+    display: none;
+    margin-top: 12px;
+    padding: 12px 16px;
+    background: rgba(239,68,68,.1);
+    border: 1px solid rgba(239,68,68,.3);
+    border-radius: 8px;
+    color: #f87171;
+    font-size: 13px;
+  }
+  .qa-error.visible { display: block; }
+
+  /* 快捷提问 */
+  .qa-quick {
+    display: flex; gap: 8px; flex-wrap: wrap;
+    margin-top: 12px;
+  }
+  .qa-quick-chip {
+    padding: 5px 14px;
+    border-radius: 16px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 12px;
+    cursor: pointer;
+    transition: all .2s;
+    font-family: inherit;
+  }
+  .qa-quick-chip:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: rgba(59,130,246,.08);
+  }
+
+  /* ---- 表格区 ---- */
+  .table-section {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .table-header {
+    padding: 16px 24px;
+    display: flex; align-items: center; gap: 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  .table-header h3 { font-size: 15px; font-weight: 600; }
+  .filter-group { margin-left: auto; display: flex; gap: 8px; flex-wrap: wrap; }
+  .filter-btn {
+    padding: 6px 14px; border-radius: 20px; border: 1px solid var(--border);
+    background: transparent; color: var(--text-secondary);
+    font-size: 13px; cursor: pointer; transition: all .2s;
+    font-family: inherit;
+  }
+  .filter-btn:hover { border-color: var(--accent); color: var(--text-primary); }
+  .filter-btn.active {
+    background: var(--accent); border-color: var(--accent);
+    color: #fff;
+  }
+  .filter-btn .count { opacity: .7; margin-left: 2px; }
+
+  table { width: 100%; border-collapse: collapse; }
+  thead th {
+    padding: 12px 16px; text-align: left;
+    font-size: 12px; font-weight: 600; color: var(--text-secondary);
+    text-transform: uppercase; letter-spacing: .5px;
+    background: rgba(15, 31, 58, 0.6);
+    border-bottom: 1px solid var(--border);
+  }
+  tbody td {
+    padding: 12px 16px; font-size: 13px;
+    border-bottom: 1px solid rgba(26, 48, 82, 0.5);
+    vertical-align: top;
+  }
+  tbody tr:hover { background: rgba(59, 130, 246, 0.05); }
+  .badge {
+    display: inline-block; padding: 2px 10px; border-radius: 10px;
+    font-size: 12px; font-weight: 500;
+  }
+  .badge-准入受阻 { background: rgba(220,38,38,.18); color: #f87171; }
+  .badge-政局失稳 { background: rgba(234,88,12,.18); color: #fb923c; }
+  .badge-政策突变 { background: rgba(217,119,6,.18); color: #fbbf24; }
+  .badge-政社夹击 { background: rgba(124,58,237,.18); color: #a78bfa; }
+  .badge-沉没成本 { background: rgba(71,85,105,.18); color: #94a3b8; }
+
+  .source-tag {
+    font-size: 11px; color: var(--text-secondary);
+    background: rgba(136,153,180,.1); padding: 1px 8px; border-radius: 4px;
+  }
+  .no-data {
+    text-align: center; padding: 48px; color: var(--text-secondary);
+    font-size: 14px;
+  }
+
+  @media (max-width: 900px) {
+    .cards { grid-template-columns: repeat(2, 1fr); }
+    .charts { grid-template-columns: 1fr; }
+    .qa-input-row { flex-direction: column; }
+  }
+  @media (max-width: 600px) {
+    .cards { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ============ 顶部导航 ============ -->
+<div class="topbar">
+  <div class="logo">🌍</div>
+  <h1>企业地缘风险监测台</h1>
+  <span class="subtitle">数据更新：2026-08-09</span>
+</div>
+
+<div class="container">
+
+<!-- ============ 汇总卡片 ============ -->
+<div class="cards" id="cards"></div>
+
+<!-- ============ 图表区 ============ -->
+<div class="charts">
+  <div class="chart-box">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px;">
+      <h3 style="margin:0">📊 五类风险事件分布</h3>
+      <select id="countryFilter" style="background:var(--bg-primary);color:var(--text-primary);border:1px solid var(--border);border-radius:8px;padding:6px 12px;font-size:13px;font-family:inherit;cursor:pointer;outline:none;">
+        <option value="全部">🌐 全部国家</option>
+      </select>
+    </div>
+    <canvas id="chartRiskType"></canvas>
+  </div>
+  <div class="chart-box">
+    <h3>📈 月度风险事件趋势</h3>
+    <canvas id="chartMonthly"></canvas>
+  </div>
+</div>
+
+<!-- ============ AI 风险问答 ============ -->
+<div class="qa-section">
+  <div class="qa-header">
+    <h3>🤖 AI 风险分析师</h3>
+    <span class="qa-badge">DeepSeek</span>
+  </div>
+  <p class="qa-desc">基于全部 25 条地缘风险事件数据，向 AI 分析师提问——仅依据数据作答，不做无依据推测</p>
+  <div class="qa-input-row">
+    <textarea id="qaInput" rows="2" placeholder="例如：评估美国市场对中资半导体企业的整体风险态势..."></textarea>
+    <button class="qa-btn" id="qaBtn" onclick="askQuestion()">🚀 发送提问</button>
+  </div>
+  <div class="qa-quick">
+    <button class="qa-quick-chip" onclick="quickAsk('请总结当前中资半导体企业面临的最突出的三类风险，并各举一个具体事件。')">🔥 最突出风险</button>
+    <button class="qa-quick-chip" onclick="quickAsk('哪些国家对中资半导体企业的准入受阻风险最严重？')">🚫 准入受阻分析</button>
+    <button class="qa-quick-chip" onclick="quickAsk('请按时间线梳理2026年上半年政策突变类事件，并评估趋势。')">📅 政策突变趋势</button>
+    <button class="qa-quick-chip" onclick="quickAsk('在东南亚地区，中资封测企业面临哪些地缘风险？')">🌏 东南亚风险</button>
+  </div>
+  <div class="qa-loading" id="qaLoading">
+    <div class="spinner"></div> AI 正在分析全部 25 条风险事件数据...
+  </div>
+  <div class="qa-error" id="qaError"></div>
+  <div class="qa-answer" id="qaAnswer"></div>
+</div>
+
+<!-- ============ 明细表格 ============ -->
+<div class="table-section">
+  <div class="table-header">
+    <h3>📋 风险事件明细</h3>
+    <div class="filter-group" id="filterGroup"></div>
+  </div>
+  <table>
+    <thead>
+      <tr>
+        <th>日期</th>
+        <th>国家</th>
+        <th>风险类型</th>
+        <th>标题</th>
+        <th>正文摘要</th>
+        <th>来源</th>
+      </tr>
+    </thead>
+    <tbody id="tableBody"></tbody>
+  </table>
+</div>
+
+</div>
+
+<!-- ============ 内嵌数据 & 逻辑 ============ -->
+<script>
+// ---- CSV 数据直接嵌入 ----
+const RAW_DATA = [
+  ["NEWS016","2026-05-07","印度","政策突变","印度将成熟制程芯片纳入本土制造激励计划","印度电子和信息技术部将成熟制程芯片纳入生产挂钩激励计划，同时提高整机进口壁垒，倒逼供应链本地化。","铸币报"],
+  ["NEWS001","2026-01-08","美国","政策突变","美国商务部拟将更多成熟制程芯片纳入出口管制","美国商务部发布新规草案，拟对28纳米及以下部分成熟制程设备和材料扩大对华出口限制，多家中国晶圆厂扩产计划受影响。","路透社"],
+  ["NEWS014","2026-04-16","美国","沉没成本","某中资企业宣布减记美国封测工厂投资","受关税和政府采购禁令影响，某中资企业宣布对其美国封装测试厂计提减值损失约2.3亿美元，考虑整体出售。","财新"],
+  ["NEWS926","2026-03-04","美国","政社夹击","美国工会与议员施压重审中资半导体并购案","美国劳工团体联合多名议员致信CFIUS， 要求重新审查一起已获批的中资功率器件企业并购案。","华尔街日报"],
+  ["NEWS019","2026-05-28","马来西亚","准入受阻","马来西亚收紧槟城封测园区外劳配额","马来西亚收紧槟城州电子制造业外籍劳工配额审批，多家封测厂扩产计划的人力缺口扩大。","星报"],
+  ["NEWS018","2026-05-21","欧盟","政社夹击","欧洲议会决议呼吁审查中企参与的芯片项目","欧洲议会通过不具约束力决议， 呼吁成员国审查中国企业参与的半导体制造与研发合作项目。","政客欧洲版"],
+  ["NEWS011","2026-03-26","菲律宾","政社夹击","菲律宾社区抗议半导体园区取水计划","菲律宾某封测园区因大规模取水计划遭当地社区持续抗议，环保组织已提起行政诉讼。","马尼拉公报"],
+  ["NEWS024","2026-07-02","肯尼亚","政社夹击","肯尼亚社区因征地纠纷阻断数据中心配套施工","肯尼亚某数据中心及电子组装配套项目因征地补偿纠纷遭沿线社区阻工，已中断三周。","民族日报"],
+  ["NEWS004","2026-02-03","缅甸","政局失稳","缅甸边境冲突致电子元器件陆运通道中断","缅北武装冲突扩大，经缅甸中转的电子元器件陆运通道中断，区域供应链被迫改道海运，交期延长三周。","新华社"],
+  ["NEWS927","2026-06-04","美国","政策突变","美国对东南亚转口芯片启动原产地调查","美国海关对经越南、马来西亚转口的芯片产品启动原产地调查，或追溯征收反规避关税。","路透社"],
+  ["NEWS023","2026-06-25","日本","政策突变","日本扩大半导体材料出口管理清单","日本经济产业省将更多光刻胶与特种气体品类纳入出口管理清单， 中国下游厂商备货周期拉长。","日经新闻"],
+  ["NEWS021","2026-06-11","阿根廷","沉没成本","阿根廷比索贬值致电子制造项目投资缩水","阿根廷货币大幅贬值，某外资参与的电子制造项目美元计价回报大幅缩水，股东考虑退出。","布宜诺斯艾利斯先驱报"],
+  ["NEWS017","2026-05-14","尼日利亚","政局失稳","尼日利亚大选临近引发外资数字基建观望","尼日利亚大选前政策不确定性上升，多个数据中心与电子组装项目融资方要求增加政治风险保险条款。","非洲商业内幕"],
+  ["NEWS007","2026-02-25","印度尼西亚","政策突变","印尼突然上调半导体设备进口增值税","印尼财政部发布条例，对半导体制造和封测设备进口增值税从11%上调至15%，即日生效。","雅加达邮报"],
+  ["NEWS006","2026-02-18","墨西哥","准入受阻","墨西哥暂停发放新电子制造园区外资准入许可","墨西哥经济部宣布暂停发放新的电子制造园区外资准入许可，等待新的近岸外包审查框架出台。","金融时报"],
+  ["NEWS012","2026-04-02","荷兰","政策突变","荷兰进一步收紧先进光刻机维保服务许可","荷兰政府宣布扩大出口管制范围，已售光刻设备的部分维保和备件服务对华需逐案申请许可证。","彭博社"],
+  ["NEWS015","2026-04-23","沙特阿拉伯","准入受阻","沙特要求半导体供应商满足本地化率新规","沙特新规要求政府相关项目电子元器件供应商本地化率不低于40%，外资厂商面临合规压力。","阿拉伯新闻"],
+  ["NEWS009","2026-03-12","埃及","政局失稳","埃及货币危机致电子组装项目付款拖欠","埃及外汇储备紧张，某电子组装园区项目业主方已拖欠设备款六个月，半导体设备供应商被迫暂停发货。","中东经济文摘"],
+  ["NEWS003","2026-01-22","印度","政社夹击","印度本土厂商联合请愿要求提高芯片进口关税","印度五家本土半导体厂商向政府联合请愿， 要求提高成熟制程芯片进口关税， 并发起反倾销调查申请。","经济时报"],
+  ["NEWS010","2026-03-19","巴西","准入受阻","巴西对中国芯片厂商产品认证启动复审","巴西国家电信局宣布对三家中国芯片厂商的产品认证启动复审，理由是检测报告存在程序瑕疵。","环球报"],
+  ["NEWS025","2026-07-09","英国","准入受阻","英国以国家安全为由否决一起芯片设计公司收购案","英国政府依据《国家安全与投资法》否决一起涉及芯片设计初创公司的外资收购案。","金融时报"],
+  ["NEWS022","2026-06-18","巴基斯坦","政局失稳","巴基斯坦安全局势推高电子产业园安保成本","巴基斯坦西北部安全事件频发，某中资参与的电子产业园安保成本上升，工期预计延长一年。","黎明报"],
+  ["NEWS002","2026-01-15","越南","准入受阻","越南推迟审批中资封测工厂建设许可","越南工贸部以环评补充材料为由，第三次推迟某中资芯片封装测试工厂的建设许可审批，项目已停滞八个月。","越南快讯"],
+  ["NEWS005","2026-02-11","德国","政策突变","德国将晶圆厂列为关键基础设施加强外资审查","德国内政部将半导体制造设施纳入关键基础设施保护名录，外资参股相关项目须接受额外安全审查。","明镜周刊"],
+  ["NEWS013","2026-04-09","泰国","政局失稳","泰国政局动荡拖累东部经济走廊电子产业招标","泰国联合政府解散重组， 东部经济走廊多个电子与半导体产业配套项目招标无限期推迟。","曼谷邮报"]
+];
+
+// 转为对象数组
+const COLUMNS = ["news_id","发布日期","国家","风险类型","标题","正文摘要","来源"];
+const events = RAW_DATA.map(row => {
+  const obj = {};
+  COLUMNS.forEach((k, i) => obj[k] = row[i]);
+  obj.年月 = obj.发布日期.slice(0, 7);
+  return obj;
+});
+
+// ---- 常量 ----
+const RISK_TYPES = ["准入受阻","政局失稳","政策突变","政社夹击","沉没成本"];
+const RISK_SEVERITY = {"准入受阻":0, "政局失稳":1, "政策突变":2, "政社夹击":3, "沉没成本":4};
+const MONTHS = ["2026-01","2026-02","2026-03","2026-04","2026-05","2026-06","2026-07"];
+const MONTH_LABELS = ["1月","2月","3月","4月","5月","6月","7月"];
+
+// ==================== 汇总卡片 ====================
+(function renderCards() {
+  const totalEvents = events.length;
+  const countries = new Set(events.map(e => e.国家));
+  const totalCountries = countries.size;
+  const topRisk = RISK_TYPES.reduce((best, t) => {
+    const n = events.filter(e => e.风险类型 === t).length;
+    return n > best.n ? {type:t, n} : best;
+  }, {type:"", n:0});
+  const dateRange = events.reduce((r, e) => {
+    if (e.发布日期 < r.min) r.min = e.发布日期;
+    if (e.发布日期 > r.max) r.max = e.发布日期;
+    return r;
+  }, {min:"9999", max:"0000"});
+
+  document.getElementById("cards").innerHTML = `
+    <div class="card">
+      <div class="label">📋 风险事件总数</div>
+      <div class="value" style="color:#3b82f6">${totalEvents}</div>
+      <div class="extra">覆盖 ${dateRange.min} 至 ${dateRange.max}</div>
+    </div>
+    <div class="card">
+      <div class="label">🌐 涉及国家/地区</div>
+      <div class="value" style="color:#10b981">${totalCountries}</div>
+      <div class="extra">含欧盟等超国家组织</div>
+    </div>
+    <div class="card">
+      <div class="label">⚠️ 高频风险类型</div>
+      <div class="value" style="color:#f59e0b">${topRisk.type}</div>
+      <div class="extra">共 ${topRisk.n} 件，占比 ${Math.round(topRisk.n/totalEvents*100)}%</div>
+    </div>
+    <div class="card">
+      <div class="label">🏭 风险类型覆盖</div>
+      <div class="value" style="color:#8b5cf6">5</div>
+      <div class="extra">准入受阻 / 政局失稳 / 政策突变 / 政社夹击 / 沉没成本</div>
+    </div>
+  `;
+})();
+
+// ==================== 图表 ====================
+Chart.defaults.color = "#8899b4";
+Chart.defaults.borderColor = "rgba(26,48,82,0.6)";
+Chart.defaults.font.family = `-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif`;
+
+const severityColors = [
+  "#dc2626",
+  "#ea580c",
+  "#d97706",
+  "#7c3aed",
+  "#475569",
+];
+
+const chartColors = {};
+RISK_TYPES.forEach((t, i) => { chartColors[t] = severityColors[i]; });
+
+// --- 柱状图 ---
+let riskBarChart = null;
+
+function updateBarChart(country) {
+  const filtered = country === "全部" ? events : events.filter(e => e.国家 === country);
+  const counts = RISK_TYPES.map(t => filtered.filter(e => e.风险类型 === t).length);
+  if (riskBarChart) {
+    riskBarChart.data.datasets[0].data = counts;
+    riskBarChart.update();
+  }
+}
+
+(function renderBarChart() {
+  const counts = RISK_TYPES.map(t => events.filter(e => e.风险类型 === t).length);
+  const ctx = document.getElementById("chartRiskType").getContext("2d");
+  riskBarChart = new Chart(ctx, {
+    type: "bar",
+    data: {
+      labels: RISK_TYPES,
+      datasets: [{
+        label: "事件数",
+        data: counts,
+        backgroundColor: RISK_TYPES.map((t, i) => severityColors[i] + "cc"),
+        borderColor: RISK_TYPES.map((t, i) => severityColors[i]),
+        borderWidth: 1.5,
+        borderRadius: 6,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: true,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: "#0f1f3a",
+          titleColor: "#e8edf5",
+          bodyColor: "#8899b4",
+          borderColor: "#1a3052",
+          borderWidth: 1
+        }
+      },
+      scales: {
+        y: {
+          beginAtZero: true,
+          ticks: { stepSize: 1, color: "#8899b4" },
+          grid: { color: "rgba(26,48,82,0.4)" }
+        },
+        x: {
+          ticks: { color: "#8899b4" },
+          grid: { display: false }
+        }
+      }
+    }
+  });
+
+  const select = document.getElementById("countryFilter");
+  const allCountries = [...new Set(events.map(e => e.国家))].sort();
+  allCountries.forEach(c => {
+    const opt = document.createElement("option");
+    opt.value = c; opt.textContent = c;
+    select.appendChild(opt);
+  });
+  select.addEventListener("change", () => updateBarChart(select.value));
+})();
+
+// --- 折线图 ---
+(function renderLineChart() {
+  const monthlyCounts = MONTHS.map(m => events.filter(e => e.年月 === m).length);
+  const ctx = document.getElementById("chartMonthly").getContext("2d");
+  new Chart(ctx, {
+    type: "line",
+    data: {
+      labels: MONTH_LABELS,
+      datasets: [{
+        label: "风险事件数",
+        data: monthlyCounts,
+        borderColor: "#3b82f6",
+        backgroundColor: "rgba(59,130,246,0.1)",
+        fill: true,
+        tension: 0.35,
+        pointBackgroundColor: "#3b82f6",
+        pointBorderColor: "#0f1f3a",
+        pointBorderWidth: 2,
+        pointRadius: 5,
+        pointHoverRadius: 7,
+        borderWidth: 2.5,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: true,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: "#0f1f3a",
+          titleColor: "#e8edf5",
+          bodyColor: "#8899b4",
+          borderColor: "#1a3052",
+          borderWidth: 1
+        }
+      },
+      scales: {
+        y: {
+          beginAtZero: true,
+          min: 0,
+          max: 8,
+          ticks: { stepSize: 1, color: "#8899b4" },
+          grid: { color: "rgba(26,48,82,0.4)" }
+        },
+        x: {
+          ticks: { color: "#8899b4" },
+          grid: { display: false }
+        }
+      }
+    }
+  });
+})();
+
+// ==================== AI 风险问答 ====================
+async function askQuestion() {
+  const input = document.getElementById("qaInput");
+  const btn = document.getElementById("qaBtn");
+  const loading = document.getElementById("qaLoading");
+  const error = document.getElementById("qaError");
+  const answer = document.getElementById("qaAnswer");
+
+  const question = input.value.trim();
+  if (!question) return;
+
+  // 显示加载状态
+  btn.disabled = true;
+  loading.classList.add("visible");
+  error.classList.remove("visible");
+  answer.classList.remove("visible");
+
+  try {
+    const resp = await fetch("/api/ask", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ question })
+    });
+
+    const data = await resp.json();
+
+    if (!resp.ok || data.error) {
+      error.textContent = data.error || `请求失败 (HTTP ${resp.status})`;
+      error.classList.add("visible");
+    } else {
+      answer.textContent = data.answer;
+      answer.classList.add("visible");
+    }
+  } catch (e) {
+    error.textContent = "网络请求失败，请检查服务是否已部署。本地开发请使用 vercel dev。";
+    error.classList.add("visible");
+  } finally {
+    btn.disabled = false;
+    loading.classList.remove("visible");
+  }
+}
+
+// 快捷提问
+function quickAsk(q) {
+  document.getElementById("qaInput").value = q;
+  askQuestion();
+}
+
+// Enter 发送，Shift+Enter 换行
+document.getElementById("qaInput").addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey) {
+    e.preventDefault();
+    askQuestion();
+  }
+});
+
+// ==================== 筛选 & 表格 ====================
+let currentFilter = "全部";
+
+(function renderFilterButtons() {
+  const group = document.getElementById("filterGroup");
+  const allCount = events.length;
+  const counts = {};
+  RISK_TYPES.forEach(t => { counts[t] = events.filter(e => e.风险类型 === t).length; });
+
+  let html = `<button class="filter-btn active" data-type="全部">全部<span class="count"> ${allCount}</span></button>`;
+  RISK_TYPES.forEach(t => {
+    html += `<button class="filter-btn" data-type="${t}">${t}<span class="count"> ${counts[t]}</span></button>`;
+  });
+  group.innerHTML = html;
+
+  group.addEventListener("click", e => {
+    const btn = e.target.closest(".filter-btn");
+    if (!btn) return;
+    group.querySelectorAll(".filter-btn").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    currentFilter = btn.dataset.type;
+    renderTable();
+  });
+})();
+
+function renderTable() {
+  const tbody = document.getElementById("tableBody");
+  const filtered = currentFilter === "全部"
+    ? [...events]
+    : events.filter(e => e.风险类型 === currentFilter);
+  filtered.sort((a, b) => b.发布日期.localeCompare(a.发布日期));
+
+  if (!filtered.length) {
+    tbody.innerHTML = `<tr><td colspan="6" class="no-data">暂无匹配的风险事件</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = filtered.map(e => `
+    <tr>
+      <td style="white-space:nowrap">${e.发布日期}</td>
+      <td>${e.国家}</td>
+      <td><span class="badge badge-${e.风险类型}">${e.风险类型}</span></td>
+      <td style="font-weight:500;max-width:220px">${e.标题}</td>
+      <td style="color:var(--text-secondary);max-width:320px">${e.正文摘要}</td>
+      <td><span class="source-tag">${e.来源}</span></td>
+    </tr>
+  `).join("");
+}
+
+renderTable();
+</script>
+
+</body>
+</html>
